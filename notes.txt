@@ -1,0 +1,103 @@
+DO ALL TESTS WITH HELM ONLY
+
+
+EF BE AD DE <len> 00 00 00 01 00 00 00 00 00 00 00 <packet len1> <len2> <len3> <len4>
+
+<Some sort of 4byte type>
+
+
+next 4 bytes as some sort of packet type? shortest packets seen are all 00 00 00 00
+
+observed:
+02 f3 03 00	94 bytes usually
+02 f3 03 03
+02 ed 03 00	232 len
+
+01 ec 03 00 96 byte packet, every 30 packets or so
+		length differs between stations
+
+
+
+todo:
+work on the 01ec0300 packet, they seem to be generic updates but tailored for the station thats receiving them. There doesnt seem to be any form of "station id" in them either
+
+work out what the contents of "python theory.py" mean
+	> energy is there but fuck knows what the rest is
+
+
+Getting hit:
+
+seems to NOT be f93d8080
+Seems to be c4 d2 3f b8 <seq1> <seq2>
+
+offset 0xf from that is a flipping bit
+
+
+-0-------observed types-----
+
+f9 3d 80 80 = seems to be keep alive and energy/??? updates, also some larger packets
+c4 d2 3f b8 = sent twice with a single bit flipped when ship is hit. Not affected by shields
+3c 9f 7e 07 = 
+26 12 82 f5  = seen once during messing with shields, empty packet after this
+fe c8 54 f7 = seen during messing with shields in 72 and 76 byte frame
+5f c3 72 d6  = messages from stations
+
+
+
+------- TYPE NOTES
+
+--- fe c8 54 f7
+
+seen in 72 and 76 byte frames whilst messing with shields and getting whomped
+
+04:00:00:00:00:00:00:00
+08:00:00:00:00:00:c8:42
+08:00:00:00:00:00:48:42
+
+
+----- f9 3d 80 80
+some sort of screen or station update
+
+49 3d 80 80 num 242 num 0 [0 132 26 0]
+
+bracket section appears to be a bitfield, next values are what to set.
+
+
+BIT FIELDS
+dont seem to be the same between types
+01,ec,03,00 -> seems to be HELM data
+
+          v----------------- impulse level 9 FLOAT
+          vv---------------- rotation rate 0=left,1=righ FLOAT
+          vv
+          vv   v-------------warp rate BYTE
+          vv   vv------------energy FLOAT
+          vv   vv
+          vv   vv v-----------shield on/off - possibly SHORT
+          vv   vv v         v--- rotation of ship (float)
+00000000 00000011 00010100 01000000
+00000000 00000001 00000001 00001000
+                     ^ ^       ^ ^- rear shield
+                     ^ ^       ^  front shielf
+                     ^ ^----- Ship Y
+                     ^------- Ship X
+15 : ("energy", 'f'),
+21: ("coordY", 'f'), 
+19: ("coordX", 'f'), 
+16: ("shield", 'h'), 
+14: ("warp rate", 'b'), 
+10:("rotation rate", 'f'), 
+9: ("impulse rate", 'f'),  
+23: ("unknown2", 'f'), 
+25: ("unk3", 'b'), 
+24: ("rotation", 'f'), 
+28: ("frontshield",'f'), 
+30: ("rearshield", 'f'), 
+8: ("weaponlock", "i"), 
+13:("autobeams",'b')}
+
+
+
+
+
+
