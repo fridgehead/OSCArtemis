@@ -3,7 +3,8 @@ import dpkt
 import sys
 import struct
 import math
-import time
+
+import simpleOSC
 
 globaloptions = None
 log = open("log.txt", "w")
@@ -79,7 +80,9 @@ def processPacket(message, num):
 				c = struct.unpack("i", message[24:28])[0]
 				v = decBitField(c)
 				a = decodePacket(c, message[36:],statMapHelm)
-	
+
+				for stat in shipStats:
+					simpleOSC.sendOSCMsg("/shipstate/" + stat, [shipStats[stat]])
 	
 	elif messType == [0x3c, 0x94, 0x7e, 0x07]:
 		pass
@@ -123,6 +126,10 @@ pc.setfilter('tcp src port 2010')
 
 splitStr =  "".join([chr(0xef),chr(0xbe), chr(0xad), chr(0xde)])
 pktCount = 0
+
+simpleOSC.initOSCClient("192.168.0.3", port=12000)
+
+
 # callback for received packets
 def recv_pkts(hdr, data):
 	  global pktCount  
