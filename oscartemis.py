@@ -1,5 +1,4 @@
-import pcapy
-import dpkt
+import socket
 import sys
 import struct
 import math
@@ -83,7 +82,7 @@ def processPacket(message):
 				c = struct.unpack("i", message[24:28])[0]
 				v = decBitField(c)
 				a = decodePacket(c, message[36:],statMapHelm)
-				print a
+				#print a
 
 				for stat in shipStats:
 					simpleOSC.sendOSCMsg("/shipstate/" + stat, [shipStats[stat]])
@@ -94,7 +93,8 @@ def processPacket(message):
 	elif messType == [0xc4, 0xd2, 0x3f, 0xb8]:
 		#this is most likely not the format but it gives
 		#repeatable results
-		vals = struct.unpack("iiiiiiiiiii", message[24:])
+		#print mess[24:], len(mess[24:])
+		vals = struct.unpack("iiiiiiiiiiib", message[24:])
 		if vals[2] == 1:
 			if vals[6] == shipId:
 				print "WE GOT HIT!"
@@ -111,44 +111,34 @@ def processPacket(message):
 		pass
 
 # LETS START THIS MESS
-inte = -1
 
-if len(sys.argv) < 2 :
-	print "please choose one of the following interfaces to listen on"
-	l = pcapy.findalldevs()
-	print l
-	exit()
-else:
-	inte = int(sys.argv[1])
- 
-#setup pcap
-l = pcapy.findalldevs()
-max_bytes = 1024
-promiscuous = False
-read_timeout = 100 # in milliseconds
-#pc = pcapy.open_offline("captures/fun.pcap")
-pc = pcapy.open_live(l[inte], max_bytes, promiscuous, read_timeout)
-pc.setfilter('tcp src port 2010') 
+if len(sys.argv) < 3:
+	print "Supply IP address of server plz"
+	sys.exit(1)
 
+serverip = sys.argv[1]
+oscip = sys.argv[2]
+
+print "connecting to ", serverip, ".."
 #packet header string
-splitStr =  "".join([chr(0xef),chr(0xbe), chr(0xad), chr(0xde)])
 
+splitStr = "\xef\xbe\xad\xde"
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+sock.connect((serverip, 2010))
+
+print "..connected"
 #start the OSC client
-simpleOSC.initOSCClient("192.168.0.3", port=12000)
+print "starting osc client and connecting to", oscip, ".."
+simpleOSC.initOSCClient(oscip, port=12000)
+print "..done"
+dat = ""
 
-
-# callback for received packets
-def recv_pkts(hdr, data):
-	  packet = dpkt.ethernet.Ethernet(data)
-	  
-	  #split the packet using the DEADBEEF header. TCP likes to bundle multiple packets together
-	  packets = packet.data.tcp.data.split(splitStr)
-	  #for reading from pcap files
-	  #packets = packet.data.split(splitStr)
-	  for p in packets:
-		  processPacket(p)
- 
-packet_limit = -1 # infinite
-pc.loop(packet_limit, recv_pkts) # capture packets
-
-
+while(True):
+	d = sock.recv(1024)
+	dat = d + dat
+	packets = dat.split(splitStr)
+	for p in packets:
+		processPacket(p)
+	dat = dat[-1]
