@@ -1,9 +1,8 @@
-import pcapy
-import dpkt
 import sys
 import struct
 import math
 import time
+import socket
 
 globaloptions = None
 log = open("log.txt", "w")
@@ -15,6 +14,7 @@ statMapHelm = {15 : ("energy", 'f'), 21: ("coordY", 'f'), 19: ("coordX", 'f'), 1
 
 numLens = { 'f' : 4, 'h' : 2, 'i' : 4, 'b' : 1}
 
+catalog = {}
 
 def decBitField(bitstr):
 	valcount = 0
@@ -33,6 +33,7 @@ def decodePacket(bitStr, message, statsMap):
 	valPtr = 0
 	goodPacket = True
 	tempResults = {}
+	bound = 0
 	for i in range(32):
 		if bitStr  & (1 << i) > 0:
 			try:
@@ -43,6 +44,7 @@ def decodePacket(bitStr, message, statsMap):
 				goodPacket = False
 
 			valPtr += bound
+	st = ""
 	if goodPacket:
 		for stat in tempResults:
 			shipStats[stat] = tempResults[stat]
@@ -54,19 +56,17 @@ def decodePacket(bitStr, message, statsMap):
 
 
 
-def processPacket(message, num):
+def processPacket(message):
 	global shipId
 	if len(message) == 0:
 		return
 	mess = [ord(p) for p in message]
 
-	#ok classify based mess[40:44] then length
-	# old base was 26
 	messType = mess[16:20]
 		
 	if  messType ==  [0xf9,0x3d,0x80,0x80]:
 		#next 4 bytes are bitfieldtype, <ship id,shipid> 0
-		if mess[20:24] == [0,0,0,0]:
+		if mess[20:24] == [0,0,0,0] or len(mess[24:]) == 0:
 			return
 		else:
 			playerShip = mess[20]
@@ -77,65 +77,146 @@ def processPacket(message, num):
 					print "GOT SHIP ID:", shipId
 
 				c = struct.unpack("i", message[24:28])[0]
+
 				v = decBitField(c)
 				a = decodePacket(c, message[36:],statMapHelm)
-	
-	
-	elif messType == [0x3c, 0x94, 0x7e, 0x07]:
-		pass
 
 	elif messType == [0xc4, 0xd2, 0x3f, 0xb8]:
-		vals = struct.unpack("iiiiiiiiiii", message[24:])
-		if vals[2] == 1:
-			if vals[6] == shipId:
-				print "WE GOT HIT!"
+		vals = None
+		try:
+			vals = struct.unpack("iiiiiiiiiii", message[24:])
+			if vals[2] == 1:
+				if vals[6] == shipId:
+					print "WE GOT HIT!"
+					pass
 			print "Damage from %i to %i" %(vals[5:7])
-		print "DAMAGE? ", vals 
+
+			print "DAMAGE? ", vals 
 
 
-	elif messType == [0x5f, 0xc3, 0x72, 0xd6]:
-		#print "NEW: ", mess[24:]
-		pass
+		except struct.error:
+			print "unpack error"
+			pass
+		
+#	elif messType == [0x5f, 0xc3, 0x72, 0xd6]:
+#		print "NEW: ", mess[20:]
+	#	pass
+
 
 	elif messType == [0xfe, 0xc8, 0x54, 0xf7]:
-		#print "LULWUT: ", mess[24:]	
+		#print "global? " , mess[20:]
+		if mess[20:24] == [0,0,0,0]:
+			print "global? " , mess[20:]
+			if mess[24] == 1:
+				#get ship id
+				ship = struct.unpack("i", message[28:32])[0]
+				print "ship asplode: ", ship
+				if ship == shipId:
+
+					print "KABOOM MOTHERFUCKER!"
+
+	elif messType == [0x30, 0x3e, 0x5a, 0xcc]:
+		#print "explosion " ,"--" * 20
+		#print [hex(p) for p in messType]
+		#print mess[20:]
+		c = struct.unpack("i", message[20:24])[0]
+		v = decBitField(c)
+		#print v[1]
+	elif messType == [0x3c,0x94,0x7e,0x7]:
+	#	print "eng " ,"--" * 20
+	#	print [hex(p) for p in messType]
+	#	print mess
+		c = struct.unpack("i", message[20:24])[0]
+		v = decBitField(c)
+		print v[1]
+	elif messType == [0x26, 0x12, 0x82, 0xf5]:
+		#print "ugh?", mess[24:]
 		pass
+	elif messType == [0x11, 0x67, 0xe6, 0x3d]:
+		print "SIM START", mess[20:]
+		shipId = 0
 
 
-inte = -1
+	else:
+		if messType == []:
+			return
+		print "UNKNOWN " ,"--" * 20
+		print [hex(p) for p in messType]
+		print mess
 
-if len(sys.argv) < 2 :
-	l = pcapy.findalldevs()
-	print l
-	exit()
-else:
-	inte = int(sys.argv[1])
- 
-# list all the network devices
-l = pcapy.findalldevs()
-max_bytes = 1024
-promiscuous = False
-read_timeout = 100 # in milliseconds
+if len(sys.argv) < 2:
+	print "Artemis to OSC bridge"
+	print "Usage:"
+	print "  oscartemis.py <artemisserverip> <oscserverip>"
+	sys.exit(1)
 
-#pc = pcapy.open_offline("captures/fun.pcap")
-pc = pcapy.open_live(l[inte], max_bytes, promiscuous, read_timeout)
-pc.setfilter('tcp src port 2010') 
+serverip = sys.argv[1]
 
-splitStr =  "".join([chr(0xef),chr(0xbe), chr(0xad), chr(0xde)])
-pktCount = 0
-# callback for received packets
-def recv_pkts(hdr, data):
-	  global pktCount  
-	  packet = dpkt.ethernet.Ethernet(data)
-	  
-	  packets = packet.data.tcp.data.split(splitStr)
-	  #packets = packet.data.split(splitStr)
-	  for p in packets:
-		  processPacket(p,pktCount)
-		  pktCount += 1
- 
-packet_limit = -1 # infinite
-pc.loop(packet_limit, recv_pkts) # capture packets
-log.close()
+print "connecting to ", serverip, ".."
+#packet header string
+
+splitStr = "\xef\xbe\xad\xde"
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+sock.connect((serverip, 2010))
+
+print "..connected"
+pkt = "".join([chr(p) for p in[239, 190, 173, 222, 36, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 60, 29, 130, 76, 12, 0, 0, 0, 8, 0, 0, 0, 1, 0, 0, 0]])
+
+
+print "sending engineer packet"
+#sock.send(pkt)
+
+pkt = "".join([chr(p) for p in[239, 190, 173, 222, 32, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, 60, 29, 130, 76, 13, 0, 0, 0, 0, 0, 0, 0]])
+
+
+#sock.send(pkt)
+print "..done"
+#start the OSC client
+buff = ""
+
+packets = []
+workingPacket = ""
+while(True):
+	'''
+	d = sock.recv(256)
+	dat = dat + d
+	packets = dat.split(splitStr)
+	for p in packets:
+		processPacket(p)
+	dat = dat[-1]
+	'''
+	buff = sock.recv(256)
+	#scan the buffer for the start string and length
+	packets = []
+	startPacket = -1
+	pktIndex = 0
+	while pktIndex < len(buff):
+		if buff[pktIndex : pktIndex + 4] == splitStr:
+			#PAY ATTENTION BOND
+			pktIndex += 4
+			if len(workingPacket) > 0:
+				packets.append(workingPacket)
+				workingPacket = ""
+		else:
+			workingPacket += buff[pktIndex]
+			pktIndex += 1
+	
+	for p in packets:
+		processPacket(p)
+		sock.send("")
+
+			
+	
+	
+
+			
+
+			
+
+
+
+
 
 

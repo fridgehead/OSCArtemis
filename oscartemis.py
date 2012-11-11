@@ -107,13 +107,30 @@ def processPacket(message):
 		pass
 
 	elif messType == [0xfe, 0xc8, 0x54, 0xf7]:
-		#print "LULWUT: ", mess[24:]	
-		pass
+		#print "global? " , mess[20:]
+		if mess[20:24] == [0,0,0,0]:
+			print "global? " , mess[20:]
+			if mess[24] == 1:
+				#get ship id
+				ship = struct.unpack("i", message[28:32])[0]
+				print "ship asplode: ", ship
+				if ship == shipId:
+					simpleOSC.sendOSCMsg("/shipdestroy",[1])
+					print "KABOOM MOTHERFUCKER!"
+	elif messType == [0x11, 0x67, 0xe6, 0x3d]:
+		print "SIM START", mess[20:]
+		simpleOSC.sendOSCMsg("/simstart", [1])
+		shipId = 0
+
+
+
 
 # LETS START THIS MESS
 
 if len(sys.argv) < 3:
-	print "Supply IP address of server plz"
+	print "Artemis to OSC bridge"
+	print "Usage:"
+	print "  oscartemis.py <artemisserverip> <oscserverip>"
 	sys.exit(1)
 
 serverip = sys.argv[1]
@@ -133,12 +150,50 @@ print "..connected"
 print "starting osc client and connecting to", oscip, ".."
 simpleOSC.initOSCClient(oscip, port=12000)
 print "..done"
-dat = ""
 
+
+
+buff = ""
+packets = []
+workingPacket = ""
 while(True):
-	d = sock.recv(1024)
-	dat = d + dat
+	'''
+	d = sock.recv(256)
+	dat = dat + d
 	packets = dat.split(splitStr)
 	for p in packets:
 		processPacket(p)
 	dat = dat[-1]
+	'''
+	buff = sock.recv(256)
+	#scan the buffer for the start string and length
+	packets = []
+	startPacket = -1
+	pktIndex = 0
+	while pktIndex < len(buff):
+		if buff[pktIndex : pktIndex + 4] == splitStr:
+			#PAY ATTENTION BOND
+			pktIndex += 4
+			if len(workingPacket) > 0:
+				packets.append(workingPacket)
+				workingPacket = ""
+		else:
+			workingPacket += buff[pktIndex]
+			pktIndex += 1
+	
+	for p in packets:
+		processPacket(p)
+
+			
+	
+	
+
+			
+
+			
+
+
+
+
+
+
