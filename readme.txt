@@ -2,16 +2,39 @@
 
 attempt to bridge Artemis ship stats to OSC for special effects etc
 
-so far the protocol is half documented in the notes.txt file. The script rips updates from the network stream and sticks them in a dictionary
+Requirements:
+oscartemis.py requires the following libraries
+>simpleOSC
+>pyOSC
+
+the other scripts are for testing, they can be ignored
+
+Usage:
+
+python oscartemis.py <artemis server ip> <OSC Server IP>
+
+The tool sends the following osc messages prefixed with "/shipstate/":
+"shield"
+"energy"
+"coordY"
+"coordX"
+"warp rate"
+"rotation rate"
+"impulse rate"
+"rotation"
+"frontshield"
+"rearshield"
+"weaponlock"
+"autobeams"
+"speed"
+
+values are a mixture of integers and floats.
+
+the following are sent when events happen
+
+"/shiphit"
+"/shipdestroy"
+"/simstart"
 
 
-
-osctest.py forwards all tracked stats to an IP using OSC. This was tested with a processing sketch as the destination and found to be pretty decent at updating
-
-
-Both scripts require pcapy and python 2.5 (as pcapy doesnt seem to work with 2.6+). The OSC test requires pyOSC and SimpleOSC
-
-
-TODO:
-added weapon hits to the stream
-tidy!
+So far this has been confirmed as working with Processing sketches (using oscP5 library).
