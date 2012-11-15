@@ -143,43 +143,42 @@ if len(sys.argv) < 2:
 
 serverip = sys.argv[1]
 
-print "connecting to ", serverip, ".."
-#packet header string
-
-splitStr = "\xef\xbe\xad\xde"
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-sock.connect((serverip, 2010))
-
-print "..connected"
-pkt1 = "".join([chr(p) for p in[239, 190, 173, 222, 36, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 60, 29, 130, 76, 12, 0, 0, 0, 7, 0, 0, 0, 1, 0, 0, 0]])
-
-
-print "sending engineer packet"
-#sock.send(pkt)
-
-pkt2 = "".join([chr(p) for p in[239, 190, 173, 222, 32, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, 60, 29, 130, 76, 13, 0, 0, 0, 0, 0, 0, 0]])
-
-
-#sock.send(pkt)
-print "..done"
-#start the OSC client
 buff = ""
 
 packets = []
 workingPacket = ""
 pktCount = 0
 selectionPacketSent = False
+
+serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+serversocket.bind(("127.0.0.1", 2011))
+serversocket.listen(1)
+print "Waiting for connection..."
+serverSock = None
+
+while True:
+	(serverSock, addr) = serversocket.accept()
+	print "got connection from ", addr
+	break
+
+
+print "now connecting to ", serverip, ".."
+
+#packet header string
+
+splitStr = "\xef\xbe\xad\xde"
+
+print "..connected"
+print "conecting to artemis server.."
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+sock.connect((serverip, 2010))
+
+
+
+
 while(True):
-	'''
-	d = sock.recv(256)
-	dat = dat + d
-	packets = dat.split(splitStr)
-	for p in packets:
-		processPacket(p)
-	dat = dat[-1]
-	'''
+	#get data from client
 	buff = sock.recv(256)
 	#scan the buffer for the start string and length
 	packets = []
@@ -199,19 +198,13 @@ while(True):
 	for p in packets:
 		processPacket(p)
 		pktCount += 1
-		'''THIS WORKS but cant have multiple clients registered to one station
+		#write out the packet to the outgoing conn
+		serverSock.send(p)
+
+	sock.send(serverSock.recv(100))
+
+	
 		
-			if pktCount > 10 and selectionPacketSent == False:
-			print "SENDING HELLO!"
-			sock.send(pkt1)
-			time.sleep(1.2)
-			sock.send(pkt2)
-			print "..SENT HELLO!"
-			selectionPacketSent = True
-			'''
-
-
-			
 	
 	
 
