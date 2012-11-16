@@ -110,13 +110,20 @@ class Decoder:
 		elif messType == [0x30, 0x3e, 0x5a, 0xcc]:
 			print "oh?", mess[20:]
 			pass
-		elif messType == [0x3c,0x94,0x7e,0x7]:
-			#print "eng " ,"--" * 20
-		#	print [hex(p) for p in messType]
-		#	print mess
-			c = struct.unpack("i", message[20:24])[0]
-			v = self.decBitField(c)
-			print v[1]
+		elif messType == [0x3c,0x9f,0x7e,0x7]:
+			print "engineering packet"
+
+			if mess[21] == 255:
+				print "print damage crew moving"
+			else :
+				print mess[20:]
+				for i in range(0, len(mess[21:]), 7):
+					toDec = mess[21 + i : 21 + i+7]
+					print toDec
+					c = struct.unpack("bbbf", toDec)
+					print "Subsystem damage " ,"--" * 20
+					print ".. at x:%i y:%i z:%i - damage now: %f" %(c)
+				#print mess[20:]
 		elif messType == [0x26, 0x12, 0x82, 0xf5]:
 			pass
 		elif messType == [0x11, 0x67, 0xe6, 0x3d]:
