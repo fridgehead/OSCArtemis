@@ -5,14 +5,51 @@ import struct
 
 class Decoder:
 
-	def __init__(self):
+	def __init__(self, sntFile):
 		self.shipId = 0
 		self.shipStats = {"shield": -1, "energy" : -1 ,"coordY" : -1, "coordX" : -1, "warp rate" : -1,"rotation rate" : -1, "impulse rate" : -1, "unknown" : -1, "unknown2" : -1, "rotation":-1, "frontshield" : -1, "rearshield" : -1, "weaponlock" : -1, "autobeams": -1, "speed": -1}
 
 		self.statMapHelm = {15 : ("energy", 'f'), 21: ("coordY", 'f'), 19: ("coordX", 'f'), 16: ("shield", 'h'), 14: ("warp rate", 'b'), 10:("rotation rate", 'f'), 9: ("impulse rate", 'f'),  23: ("unknown2", 'f'), 25: ("speed", 'f'), 24: ("rotation", 'f'), 28: ("frontshield",'f'), 30: ("rearshield", 'f'), 8: ("weaponlock", "i"), 13:("autobeams",'b')}
 
 		self.numLens = { 'f' : 4, 'h' : 2, 'i' : 4, 'b' : 1}
+		self.shipMap = self.loadShipData(sntFile) 
 
+	def loadShipData(self, sntFile):
+		maxX = 5
+		maxY = 4
+		maxZ = 9
+		x,y,z = 0,0,0
+		shipMap = {}
+
+		namemap = ["Primary Beam", "Torpedo", "Tactical", "Maneuver", "Impulse", "Warp", "Front Shield", "Rear Shield"]
+		print "loadint snt file.."
+		f = open("artemis.snt", "r")
+
+		for block in iter(lambda: f.read(32), ""):
+			
+			coords =  struct.unpack("fff", block[0:12])
+
+			#print [ord(p) for p in block[12:] ], coords
+			if ord(block[12]) < 254:
+				print x,y,z, "=",namemap[ord(block[12])]
+				key = "%i%i%i",(x,y,z)
+				shipMap[key] = namemap[ord(block[12])]
+
+
+			if z < maxZ:
+				z += 1
+			else:
+				z = 0
+				if y < maxY:
+					y += 1
+				else :
+					y = 0
+					x += 1
+					x %= maxZ
+		print "..done"
+		return shipMap
+
+			
 
 	def decBitField(self, bitstr):
 		valcount = 0
@@ -114,15 +151,20 @@ class Decoder:
 			print "engineering packet"
 
 			if mess[21] == 255:
-				print "print damage crew moving"
+				pass
+				#print "print damage crew moving"
 			else :
 				print mess[20:]
 				for i in range(0, len(mess[21:]), 7):
-					toDec = mess[21 + i : 21 + i+7]
-					print toDec
-					c = struct.unpack("bbbf", toDec)
-					print "Subsystem damage " ,"--" * 20
-					print ".. at x:%i y:%i z:%i - damage now: %f" %(c)
+					toDec = message[21 + i : 21 + i+7]
+
+					if ord(toDec[0]) != 255:
+						damage = struct.unpack("f", toDec[3:7])[0]
+						print "Subsystem damage " ,"--" * 20
+						x,y,z = [ord(p) for p in toDec[0:3]]
+						print ".. at x:%i y:%i z:%i - damage now: %f" %(x,y,z, damage)
+					else:
+						break
 				#print mess[20:]
 		elif messType == [0x26, 0x12, 0x82, 0xf5]:
 			pass
