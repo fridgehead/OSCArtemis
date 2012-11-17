@@ -23,7 +23,7 @@ class Decoder:
 		# ship systems can be calculated.
 		# This is how the client does it... warp: 25% means 1 out of 4 nodes isnt
 		# damaged
-		systemCount = Counter(self.shipMap.values())
+		self.systemCount = Counter(self.shipMap.values())
 
 		self.sendOSC = False
 		if len(oscServer) == 2:
@@ -149,9 +149,9 @@ class Decoder:
 
 					v = self.decBitField(c)
 					a = self.decodePacket(c, message[36:],self.statMapHelm)
-
-					for stat in shipStats:
-						self.sendOSCMessage("/shipstate/" + stat, [shipStats[stat]])
+					if self.sendOSC :
+						for stat in self.shipStats:
+							self.sendOSCMessage("/shipstate/" + stat, [self.shipStats[stat]])
 		elif messType == [0xc4, 0xd2, 0x3f, 0xb8]:
 			vals = None
 			try:
@@ -202,7 +202,7 @@ class Decoder:
 							coord = "%i%i%i" % (x,y,z)
 							subName = self.shipMap[coord]
 							print "..which is mapped to ", subName
-							self.sendOSCMessage("/subdamage", [subName, coord, self.SystemCount[subName], damage])
+							self.sendOSCMessage("/subdamage", [subName, coord, self.systemCount[subName], damage])
 						except KeyError:
 							print "..not a mapped system"
 							self.sendOSCMessage("/subdamage", ["unmapped", coord, self.SystemCount[subName], damage])
