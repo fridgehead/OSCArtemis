@@ -3,6 +3,7 @@ import time
 import socket
 from Artemis import Decoder
 import select
+import argparse
 
 if len(sys.argv) < 1:
 	print "ArtemisProxy"

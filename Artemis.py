@@ -1,19 +1,48 @@
 
 import struct
-
-
+from collections import Counter
+import simpleOSC
 
 class Decoder:
 
-	def __init__(self, sntFile):
+	def __init__(self, sntFile, oscServer=[]):
+		#the current Ship ID
 		self.shipId = 0
+		# ship stats
 		self.shipStats = {"shield": -1, "energy" : -1 ,"coordY" : -1, "coordX" : -1, "warp rate" : -1,"rotation rate" : -1, "impulse rate" : -1, "unknown" : -1, "unknown2" : -1, "rotation":-1, "frontshield" : -1, "rearshield" : -1, "weaponlock" : -1, "autobeams": -1, "speed": -1}
 
+		#a map of bitfield position to value name and type
 		self.statMapHelm = {15 : ("energy", 'f'), 21: ("coordY", 'f'), 19: ("coordX", 'f'), 16: ("shield", 'h'), 14: ("warp rate", 'b'), 10:("rotation rate", 'f'), 9: ("impulse rate", 'f'),  23: ("unknown2", 'f'), 25: ("speed", 'f'), 24: ("rotation", 'f'), 28: ("frontshield",'f'), 30: ("rearshield", 'f'), 8: ("weaponlock", "i"), 13:("autobeams",'b')}
 
+		#sizes of struct fmt types. struct.calcsize returns size including alignment which this seems to ignore sometimes
 		self.numLens = { 'f' : 4, 'h' : 2, 'i' : 4, 'b' : 1}
+		#load the ship data from the snt file
 		self.shipMap = self.loadShipData(sntFile) 
+		# nowe we know the coords of ship systems count the number of each
+		# this is sent to osc servers so that total damage of
+		# ship systems can be calculated.
+		# This is how the client does it... warp: 25% means 1 out of 4 nodes isnt
+		# damaged
+		systemCount = Counter(self.shipMap.values())
 
+		self.sendOSC = False
+		if len(oscServer) == 2:
+			print "start osc client.."
+			simpleOSC.initOSCClient(oscServer[0], oscServer[1])
+			print "done"
+			self.sendOSC = True
+
+
+	def sendOSCMessage(self, target, data=[]):
+		if self.sendOSC == True:
+			simpleOSC.sendOSCMsg(target, data)
+
+
+
+	'''
+	load ship data from the snt file
+	only loads nodes that have a subsystem assigned to them
+	'''
 	def loadShipData(self, sntFile):
 		maxX = 5
 		maxY = 4
@@ -22,8 +51,9 @@ class Decoder:
 		shipMap = {}
 
 		namemap = ["Primary Beam", "Torpedo", "Tactical", "Maneuver", "Impulse", "Warp", "Front Shield", "Rear Shield"]
+		
 		print "loadint snt file.."
-		f = open("artemis.snt", "r")
+		f = open(sntFile, "r")
 
 		for block in iter(lambda: f.read(32), ""):
 			
@@ -32,10 +62,8 @@ class Decoder:
 			#print [ord(p) for p in block[12:] ], coords
 			if ord(block[12]) < 254:
 				print x,y,z, "=",namemap[ord(block[12])]
-				key = "%i%i%i",(x,y,z)
+				key = "%i%i%i"%(x,y,z)
 				shipMap[key] = namemap[ord(block[12])]
-
-
 			if z < maxZ:
 				z += 1
 			else:
@@ -50,7 +78,9 @@ class Decoder:
 		return shipMap
 
 			
-
+	''' Decode a 32bit int to a binary value as a string
+		also return number of bits set to 1
+	'''
 	def decBitField(self, bitstr):
 		valcount = 0
 		outstr = ""
@@ -63,6 +93,8 @@ class Decoder:
 				outstr += "0"
 		return (valcount, outstr)
 
+	''' decode a packet using a map of bitfield -> statname
+	'''
 	def decodePacket(self, bitStr, message, statsMap):
 		valPtr = 0
 		goodPacket = True
@@ -96,9 +128,13 @@ class Decoder:
 		mess = [ord(p) for p in message]
 
 		messType = mess[16:20]
+
+		''' ship state data
+			sent to all connected clients, even those that arent
+			assigned a station
+		'''
 			
 		if  messType ==  [0xf9,0x3d,0x80,0x80]:
-			#next 4 bytes are bitfieldtype, <ship id,shipid> 0
 			if mess[20:24] == [0,0,0,0] or len(mess[24:]) == 0:
 				return
 			else:
@@ -114,22 +150,21 @@ class Decoder:
 					v = self.decBitField(c)
 					a = self.decodePacket(c, message[36:],self.statMapHelm)
 
+					for stat in shipStats:
+						self.sendOSCMessage("/shipstate/" + stat, [shipStats[stat]])
 		elif messType == [0xc4, 0xd2, 0x3f, 0xb8]:
 			vals = None
 			try:
 				vals = struct.unpack("iiiiiiiiiii", message[24:])
 				if vals[2] == 1:
 					if vals[6] == self.shipId:
+						self.sendOSCMessage("/shiphit", [1])
 						print "WE GOT HIT!"
-						pass
 				print "Damage from %i to %i" %(vals[5:7])
-
-				print "DAMAGE? ", vals 
 
 
 			except struct.error:
 				print "unpack error"
-				pass
 
 
 		elif messType == [0xfe, 0xc8, 0x54, 0xf7]:
@@ -142,10 +177,10 @@ class Decoder:
 					print "ship asplode: ", ship
 					if ship == self.shipId:
 
-						print "KABOOM MOTHERFUCKER!"
+						self.sendOSCMessage("/shipdestroy",[1])
+						print "KABOOM SHIP ASPLODED!"
 
 		elif messType == [0x30, 0x3e, 0x5a, 0xcc]:
-			print "oh?", mess[20:]
 			pass
 		elif messType == [0x3c,0x9f,0x7e,0x7]:
 			print "engineering packet"
@@ -154,7 +189,7 @@ class Decoder:
 				pass
 				#print "print damage crew moving"
 			else :
-				print mess[20:]
+		#		print mess[20:]
 				for i in range(0, len(mess[21:]), 7):
 					toDec = message[21 + i : 21 + i+7]
 
@@ -163,13 +198,24 @@ class Decoder:
 						print "Subsystem damage " ,"--" * 20
 						x,y,z = [ord(p) for p in toDec[0:3]]
 						print ".. at x:%i y:%i z:%i - damage now: %f" %(x,y,z, damage)
+						try:
+							coord = "%i%i%i" % (x,y,z)
+							subName = self.shipMap[coord]
+							print "..which is mapped to ", subName
+							self.sendOSCMessage("/subdamage", [subName, coord, self.SystemCount[subName], damage])
+						except KeyError:
+							print "..not a mapped system"
+							self.sendOSCMessage("/subdamage", ["unmapped", coord, self.SystemCount[subName], damage])
+
 					else:
 						break
 				#print mess[20:]
 		elif messType == [0x26, 0x12, 0x82, 0xf5]:
 			pass
+
 		elif messType == [0x11, 0x67, 0xe6, 0x3d]:
 			print "SIM START", mess[20:]
+			self.sendOSCMessage("/simstart", [1])
 			self.shipId = 0
 
 
