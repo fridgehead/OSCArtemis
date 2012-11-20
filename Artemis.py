@@ -205,7 +205,7 @@ class Decoder:
 							self.sendOSCMessage("/subdamage", [subName, coord, self.systemCount[subName], damage])
 						except KeyError:
 							print "..not a mapped system"
-							self.sendOSCMessage("/subdamage", ["unmapped", coord, self.SystemCount[subName], damage])
+							self.sendOSCMessage("/subdamage", ["unmapped", coord, self.systemCount[subName], damage])
 
 					else:
 						break
